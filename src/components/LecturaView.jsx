@@ -11,7 +11,7 @@ function formatoTiempo(segundos) {
   return `${m}:${s}`;
 }
 
-export default function LecturaView({ lectura, onTerminar, onVolver }) {
+export default function LecturaView({ lectura, onTerminar, onVolver, acciones }) {
   const [segundos, setSegundos] = useState(0);
   const [tamano, setTamano] = useState(18);
   const intervalRef = useRef(null);
@@ -32,7 +32,7 @@ export default function LecturaView({ lectura, onTerminar, onVolver }) {
   return (
     <section className="rounded-3xl border border-line bg-surface p-6 sm:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-5">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-xl font-extrabold text-ink">{lectura.titulo}</h2>
           <p className="mt-1 text-xs text-ink-soft">
             {nivel.label} · {unidad.titulo} ·{" "}
@@ -41,7 +41,7 @@ export default function LecturaView({ lectura, onTerminar, onVolver }) {
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex items-center gap-1 rounded-full border border-line px-2 py-1">
             <button
               type="button"
@@ -63,6 +63,7 @@ export default function LecturaView({ lectura, onTerminar, onVolver }) {
           <span className="rounded-full bg-brand-soft px-3.5 py-1.5 font-mono text-sm font-semibold text-brand">
             {formatoTiempo(segundos)}
           </span>
+          {acciones}
         </div>
       </div>
 

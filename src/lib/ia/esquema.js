@@ -46,7 +46,7 @@ export const esquemaPreguntas = z.object({
 export const esquemaLectura = esquemaTexto.merge(esquemaPreguntas);
 
 // Segunda capa: reglas que el esquema no puede expresar y que definen la validez pedagógica.
-export function validarCurricularmente(datos, config) {
+export function validarCurricularmente(datos, config, { permitirExtension = false } = {}) {
   const problemas = [];
   const nivel = getNivel(config.nivel);
   const rango = getExtension(config.nivel, config.dificultad);
@@ -56,7 +56,7 @@ export function validarCurricularmente(datos, config) {
   const nPalabras = contarPalabras(datos.parrafos);
   const margen = Math.round(rango.min * 0.12);
   const corto = nPalabras < rango.min - margen;
-  if (corto || nPalabras > rango.max + margen) {
+  if (!permitirExtension && (corto || nPalabras > rango.max + margen)) {
     problemas.push(
       `El texto tiene ${nPalabras} palabras y ${nivel.label} exige entre ${rango.min} y ${rango.max}.`
     );
@@ -96,7 +96,13 @@ export function validarCurricularmente(datos, config) {
     }
   }
 
-  return { valido: problemas.length === 0, problemas, nPalabras, corto };
+  return {
+    valido: problemas.length === 0,
+    problemas,
+    nPalabras,
+    corto,
+    fueraExtension: corto || nPalabras > rango.max + margen,
+  };
 }
 
 // Valida solo la extensión, para la primera fase de las actividades largas.

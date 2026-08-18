@@ -106,21 +106,39 @@ export function VozProvider({ children }) {
     setHablandoId(null);
   }, []);
 
+  const crearEnunciado = useCallback((id, texto) => {
+    const enunciado = new SpeechSynthesisUtterance(texto);
+    enunciado.lang = vozRef.current?.lang ?? "es-CL";
+    if (vozRef.current) enunciado.voice = vozRef.current;
+    enunciado.rate = 0.95;
+    enunciado.pitch = 1.1;
+    enunciado.onstart = () => setHablandoId(id);
+    enunciado.onend = () => {
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        setHablandoId(null);
+      }
+    };
+    enunciado.onerror = () => setHablandoId(null);
+    return enunciado;
+  }, []);
+
   const hablar = useCallback(
     (id, texto) => {
       if (!texto || typeof window === "undefined" || !("speechSynthesis" in window)) return;
       window.speechSynthesis.cancel();
-      const enunciado = new SpeechSynthesisUtterance(texto);
-      enunciado.lang = vozRef.current?.lang ?? "es-CL";
-      if (vozRef.current) enunciado.voice = vozRef.current;
-      enunciado.rate = 0.95;
-      enunciado.pitch = 1.1;
-      enunciado.onend = () => setHablandoId(null);
-      enunciado.onerror = () => setHablandoId(null);
+      const enunciado = crearEnunciado(id, texto);
       setHablandoId(id);
       window.speechSynthesis.speak(enunciado);
     },
-    []
+    [crearEnunciado]
+  );
+
+  const encolar = useCallback(
+    (id, texto) => {
+      if (!texto || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+      window.speechSynthesis.speak(crearEnunciado(id, texto));
+    },
+    [crearEnunciado]
   );
 
   const alternar = useCallback(
@@ -149,7 +167,7 @@ export function VozProvider({ children }) {
 
   return (
     <VozContext.Provider
-      value={{ soportada, activa, setActiva, hablar, detener, alternar, hablandoId, nombreVoz }}
+      value={{ soportada, activa, setActiva, hablar, encolar, detener, alternar, hablandoId, nombreVoz }}
     >
       {children}
     </VozContext.Provider>

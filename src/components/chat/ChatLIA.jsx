@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { BurbujaLIA, BurbujaUsuario } from "@/components/chat/Burbuja";
 import CierreActividad from "@/components/chat/CierreActividad";
 import ProgresoGeneracion from "@/components/chat/ProgresoGeneracion";
+import PropuestaFueraRango from "@/components/chat/PropuestaFueraRango";
 import LecturaView from "@/components/LecturaView";
 import Resultados from "@/components/Resultados";
 import BotonEscuchar from "@/components/voz/BotonEscuchar";
@@ -21,7 +22,8 @@ import {
   TIPOS_TEXTO,
 } from "@/data/curriculum";
 import { calcularDesempeno } from "@/lib/desempeno";
-import { generarConProgreso } from "@/lib/generarConProgreso";
+import { confirmarActividad, generarConProgreso } from "@/lib/generarConProgreso";
+import { aleatorizarActividad } from "@/lib/aleatorizarActividad";
 import {
   anuncioLectura,
   AVISO_IA,
@@ -52,7 +54,7 @@ const claseChip =
   "rounded-full border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:border-brand hover:bg-brand-soft hover:text-brand";
 
 export default function ChatLIA() {
-  const { soportada, activa, setActiva, hablar } = useVoz();
+  const { soportada, activa, setActiva, encolar } = useVoz();
 
   const [mensajes, setMensajes] = useState([]);
   const [cola, setCola] = useState([...SALUDO]);
@@ -66,10 +68,18 @@ export default function ChatLIA() {
   const [indice, setIndice] = useState(0);
   const [resultado, setResultado] = useState(null);
   const [pasosGeneracion, setPasosGeneracion] = useState([]);
+  const [propuesta, setPropuesta] = useState(null);
   const [verInforme, setVerInforme] = useState(false);
 
   const finRef = useRef(null);
   const ultimoLeidoRef = useRef(null);
+  const seguirAlFinalRef = useRef(true);
+
+  const marcarSiEstaAlFinal = () => {
+    if (typeof window === "undefined") return;
+    seguirAlFinalRef.current =
+      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 120;
+  };
 
   // Muestra los mensajes de L+IA uno a uno para simular la conversación.
   useEffect(() => {
@@ -80,6 +90,7 @@ export default function ChatLIA() {
     setEscribiendo(true);
     const temporizador = setTimeout(() => {
       const [primero, ...resto] = cola;
+      marcarSiEstaAlFinal();
       setMensajes((m) => [...m, { id: nuevoId(), de: "lia", texto: primero }]);
       setCola(resto);
     }, 520);
@@ -87,7 +98,8 @@ export default function ChatLIA() {
   }, [cola]);
 
   useEffect(() => {
-    finRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!seguirAlFinalRef.current) return;
+    finRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
   }, [mensajes, escribiendo, paso]);
 
   // El soporte de voz se conoce recién tras montar, así que el primer paso se decide al terminar el saludo.
@@ -102,12 +114,14 @@ export default function ChatLIA() {
     const ultimo = mensajes[mensajes.length - 1];
     if (!ultimo || ultimo.de !== "lia" || ultimo.id === ultimoLeidoRef.current) return;
     ultimoLeidoRef.current = ultimo.id;
-    hablar(ultimo.id, ultimo.texto);
-  }, [mensajes, activa, hablar]);
+    encolar(ultimo.id, ultimo.texto);
+  }, [mensajes, activa, encolar]);
 
   const decir = (...textos) => setCola((c) => [...c, ...textos.filter(Boolean)]);
-  const responder = (texto) =>
+  const responder = (texto) => {
+    marcarSiEstaAlFinal();
     setMensajes((m) => [...m, { id: nuevoId(), de: "usuario", texto }]);
+  };
 
   const elegirVoz = (quiere) => {
     responder(quiere ? "Sí, léeme" : "No, gracias");
@@ -206,6 +220,7 @@ export default function ChatLIA() {
   const comenzar = async () => {
     responder("¡Comencemos!");
     setPaso("generando");
+    setPropuesta(null);
     setPasosGeneracion([{ tipo: "preparando", estado: "activo" }]);
 
     const anotar = (evento) =>
@@ -231,8 +246,14 @@ export default function ChatLIA() {
       return;
     }
 
-    setLectura(final.texto);
-    decir(final.aviso, AVISO_IA, anuncioLectura(final.texto.nivel));
+    if (final.propuestaFueraRango) {
+      setPropuesta(final);
+      return;
+    }
+
+    const actividad = aleatorizarActividad(final.texto);
+    setLectura(actividad);
+    decir(final.aviso, AVISO_IA, anuncioLectura(actividad.nivel));
     setPaso("lectura");
   };
 
@@ -532,10 +553,34 @@ export default function ChatLIA() {
 
         {paso === "generando" && (
           <div className="pl-12">
-            <ProgresoGeneracion
-              pasos={pasosGeneracion}
-              extension={config.nivel ? getExtension(config.nivel, config.dificultad) : null}
-            />
+            {propuesta ? (
+              <PropuestaFueraRango
+                propuesta={propuesta}
+                config={config}
+                cargando={false}
+                onReintentar={() => {
+                  setPropuesta(null);
+                  setPaso("confirmar");
+                }}
+                onAceptar={async () => {
+                  try {
+                    const texto = await confirmarActividad(config, propuesta);
+                    setLectura(aleatorizarActividad(texto));
+                    setPropuesta(null);
+                    decir(AVISO_IA, anuncioLectura(texto.nivel));
+                    setPaso("lectura");
+                  } catch (error) {
+                    decir(`No pude guardar esta propuesta: ${error.message}`);
+                    setPaso("confirmar");
+                  }
+                }}
+              />
+            ) : (
+              <ProgresoGeneracion
+                pasos={pasosGeneracion}
+                extension={config.nivel ? getExtension(config.nivel, config.dificultad) : null}
+              />
+            )}
           </div>
         )}
 

@@ -1,17 +1,20 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import AvisoIA from "@/components/AvisoIA";
+import BotonGuiaDocentePDF from "@/components/BotonGuiaDocentePDF";
 import ChatLIA from "@/components/chat/ChatLIA";
 import ProgresoGeneracion from "@/components/chat/ProgresoGeneracion";
+import PropuestaFueraRango from "@/components/chat/PropuestaFueraRango";
 import ConfigPanel from "@/components/ConfigPanel";
 import LecturaView from "@/components/LecturaView";
 import Quiz from "@/components/Quiz";
 import Resultados from "@/components/Resultados";
 import { useVoz } from "@/components/voz/VozProvider";
 import { CONFIG_DEFAULT, getExtension } from "@/data/curriculum";
-import { generarConProgreso } from "@/lib/generarConProgreso";
+import { confirmarActividad, generarConProgreso } from "@/lib/generarConProgreso";
+import { aleatorizarActividad } from "@/lib/aleatorizarActividad";
 
 const PASOS = [
   { id: "config", label: "Configurar" },
@@ -41,6 +44,16 @@ function AplicacionLectura() {
   const [cargando, setCargando] = useState(false);
   const [pasosGeneracion, setPasosGeneracion] = useState([]);
   const [error, setError] = useState(null);
+  const [propuesta, setPropuesta] = useState(null);
+  const lecturaInicioRef = useRef(null);
+
+  useEffect(() => {
+    if (modo !== "docente" || paso !== "lectura" || !lectura) return;
+    const temporizador = requestAnimationFrame(() => {
+      lecturaInicioRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    });
+    return () => cancelAnimationFrame(temporizador);
+  }, [modo, paso, lectura]);
 
   // Abre directamente un texto de la biblioteca, sin pasar por la configuración.
   useEffect(() => {
@@ -51,7 +64,7 @@ function AplicacionLectura() {
       .then((r) => r.json())
       .then((datos) => {
         if (datos.error) throw new Error(datos.error);
-        setLectura(datos);
+        setLectura(aleatorizarActividad(datos));
         setRespuestas({});
         setMetricas(null);
         setPaso("lectura");
@@ -63,6 +76,7 @@ function AplicacionLectura() {
   const generar = async () => {
     setCargando(true);
     setError(null);
+    setPropuesta(null);
     setPasosGeneracion([{ tipo: "preparando", estado: "activo" }]);
 
     const anotar = (evento) =>
@@ -87,8 +101,13 @@ function AplicacionLectura() {
       return;
     }
 
+    if (final.propuestaFueraRango) {
+      setPropuesta(final);
+      return;
+    }
+
     if (final.aviso) setError(final.aviso);
-    setLectura(final.texto);
+    setLectura(aleatorizarActividad(final.texto));
     setRespuestas({});
     setMetricas(null);
     setPaso("lectura");
@@ -181,6 +200,29 @@ function AplicacionLectura() {
 
           {paso === "config" && (
             <>
+              {propuesta && (
+                <div className="mb-5">
+                  <PropuestaFueraRango
+                    propuesta={propuesta}
+                    config={config}
+                    cargando={cargando}
+                    onReintentar={() => setPropuesta(null)}
+                    onAceptar={async () => {
+                      setCargando(true);
+                      try {
+                        const texto = await confirmarActividad(config, propuesta);
+                        setLectura(aleatorizarActividad(texto));
+                        setPropuesta(null);
+                        setPaso("lectura");
+                      } catch (e) {
+                        setError(e.message);
+                      } finally {
+                        setCargando(false);
+                      }
+                    }}
+                  />
+                </div>
+              )}
               {cargando && (
                 <div className="mb-5">
                   <ProgresoGeneracion
@@ -199,14 +241,17 @@ function AplicacionLectura() {
           )}
 
           {paso === "lectura" && lectura && (
-            <LecturaView
-              lectura={lectura}
-              onTerminar={(m) => {
-                setMetricas(m);
-                setPaso("preguntas");
-              }}
-              onVolver={() => setPaso("config")}
-            />
+            <div ref={lecturaInicioRef} className="space-y-4 scroll-mt-6">
+              <LecturaView
+                lectura={lectura}
+                acciones={<BotonGuiaDocentePDF lectura={lectura} />}
+                onTerminar={(m) => {
+                  setMetricas(m);
+                  setPaso("preguntas");
+                }}
+                onVolver={() => setPaso("config")}
+              />
+            </div>
           )}
 
           {paso === "preguntas" && lectura && (

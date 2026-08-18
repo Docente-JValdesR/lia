@@ -1,6 +1,7 @@
 import {
   Document,
   Page,
+  Path,
   Rect,
   StyleSheet,
   Svg,
@@ -144,6 +145,8 @@ export default function InformePDF({ lectura, respuestas, metricas, desempeno })
           <View style={estilos.marca}>
             <Svg width="26" height="26" viewBox="0 0 64 64">
               <Rect width="64" height="64" rx="16" fill={COLOR.brand} />
+              <Path d="M20 17v24h13" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M43 25v13M36.5 31.5h13" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round" />
             </Svg>
             <View>
               <Text style={estilos.marcaTexto}>L+IA</Text>

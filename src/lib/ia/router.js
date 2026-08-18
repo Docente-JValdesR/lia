@@ -12,7 +12,6 @@ import {
   construirPrompt,
   construirPromptPreguntas,
   construirPromptTexto,
-  prompsCorreccion,
   UMBRAL_DOS_FASES,
 } from "@/lib/ia/prompt";
 import {
@@ -25,7 +24,6 @@ import {
 // El plan de Vercel corta la función a 60 s: se reserva margen para responder antes de ese corte.
 const PRESUPUESTO_MS = Number(process.env.PRESUPUESTO_IA_MS) || 48000;
 const MINIMO_POR_INTENTO_MS = 10000;
-const MAX_CORRECCIONES = 1;
 
 export async function generarActividad(config, opciones = {}) {
   const { proveedor, onProgreso = () => {}, inicioMs = Date.now() } = opciones;
@@ -64,7 +62,6 @@ export async function generarActividad(config, opciones = {}) {
             modelo,
             alternativos: disponibles.filter((m) => m.id !== modelo.id),
             config,
-            rango,
             maxTokens,
             restante,
             onProgreso,
@@ -75,6 +72,22 @@ export async function generarActividad(config, opciones = {}) {
       const curricular = validarCurricularmente(datos, config);
 
       if (!curricular.valido) {
+        const candidato = validarCurricularmente(datos, config, { permitirExtension: true });
+        if (candidato.valido && candidato.fueraExtension) {
+          onProgreso({
+            tipo: "propuesta_fuera_rango",
+            proveedor: modelo.proveedor,
+            palabras: candidato.nPalabras,
+          });
+          return {
+            texto: datos,
+            proveedor: modelo.proveedor,
+            modelo: modelo.modelo,
+            fallos,
+            propuestaFueraRango: true,
+            nPalabras: candidato.nPalabras,
+          };
+        }
         fallos.push(`${modelo.id}: ${curricular.problemas[0]}`);
         onProgreso({
           tipo: "rechazado",
@@ -124,15 +137,15 @@ async function generarEnDosFases({
   modelo,
   alternativos = [],
   config,
-  rango,
   maxTokens,
   restante,
   onProgreso,
 }) {
   let prompt = construirPromptTexto(config);
   let textoGenerado = null;
+  let extensionFueraRango = false;
 
-  for (let intento = 0; intento <= MAX_CORRECCIONES; intento++) {
+  for (let intento = 0; intento < 1; intento++) {
     const salida = await pedirGeneracion(modelo, prompt, {
       timeoutMs: restante(),
       maxTokens: Math.round(maxTokens * 0.75),
@@ -150,19 +163,12 @@ async function generarEnDosFases({
       break;
     }
 
-    if (intento === MAX_CORRECCIONES || restante() < MINIMO_POR_INTENTO_MS) {
-      throw new Error(extension.problema);
-    }
-
-    onProgreso({
-      tipo: "rechazado",
-      proveedor: modelo.proveedor,
-      motivo: `${extension.problema} Pidiendo una versión más extensa.`,
-    });
-    prompt = prompsCorreccion(construirPromptTexto(config), {
-      nPalabras: extension.nPalabras,
-      rango,
-    });
+    // El texto tiene estructura válida: se conserva como propuesta para que la persona decida,
+    // evitando gastar otra llamada solo para ajustar una extensión que puede ser utilizable.
+    textoGenerado = analisis.data;
+    extensionFueraRango = true;
+    onProgreso({ tipo: "propuesta_fuera_rango", proveedor: modelo.proveedor, palabras: extension.nPalabras });
+    break;
   }
 
   const promptPreguntas = construirPromptPreguntas(config, textoGenerado);
@@ -190,7 +196,7 @@ async function generarEnDosFases({
       if (!analisis.success) {
         throw new Error(`formato inválido de preguntas: ${resumirIssues(analisis.error)}`);
       }
-      return { ...textoGenerado, preguntas: analisis.data.preguntas };
+      return { ...textoGenerado, preguntas: analisis.data.preguntas, extensionFueraRango };
     } catch (error) {
       ultimoError = error;
       onProgreso({
@@ -202,6 +208,20 @@ async function generarEnDosFases({
   }
 
   throw ultimoError ?? new Error("No se pudieron generar las preguntas.");
+}
+
+export async function guardarActividadConfirmada({ datos, config, proveedor, modelo }) {
+  const curricular = validarCurricularmente(datos, config, { permitirExtension: true });
+  if (!curricular.valido || !curricular.fueraExtension) {
+    throw new Error("La propuesta ya no es válida para confirmarla.");
+  }
+  return guardarActividad({
+    datos,
+    config,
+    modelo: { proveedor, modelo },
+    promptVersion: "v1-confirmada",
+    nPalabras: curricular.nPalabras,
+  });
 }
 
 function resumirIssues(error) {

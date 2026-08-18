@@ -30,6 +30,32 @@ export async function obtenerActividad(config, opciones = {}) {
 
   try {
     const resultado = await generarActividad(config, { ...opciones, onProgreso });
+    if (resultado.propuestaFueraRango) {
+      onProgreso({ tipo: "propuesta_lista", origen: "ia", proveedor: resultado.proveedor });
+      return {
+        origen: "ia",
+        propuestaFueraRango: true,
+        texto: serializarTexto({
+          ...resultado.texto,
+          id: null,
+          parrafos: JSON.stringify(resultado.texto.parrafos),
+          nivel: config.nivel,
+          unidad: config.unidad,
+          tipoTexto: config.tipoTexto,
+          dificultad: config.dificultad,
+          nPalabras: resultado.nPalabras,
+          estado: "propuesta",
+          preguntas: resultado.texto.preguntas.map((pregunta, i) => ({
+            ...pregunta,
+            id: `propuesta-${i}`,
+            habilidadId: pregunta.habilidad,
+            alternativas: JSON.stringify(pregunta.alternativas),
+          })),
+        }),
+        proveedor: resultado.proveedor,
+        modelo: resultado.modelo,
+      };
+    }
     onProgreso({ tipo: "listo", origen: "ia", proveedor: resultado.proveedor });
     return {
       origen: "ia",
