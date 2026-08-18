@@ -3,9 +3,9 @@ import { validarConfiguracion } from "@/lib/ia/contrato";
 import { obtenerActividad } from "@/lib/ia/orquestador";
 
 export const runtime = "nodejs";
-export const maxDuration = 180;
+// Límite del plan Hobby de Vercel; el router reserva margen para responder antes del corte.
+export const maxDuration = 60;
 
-// Punto de entrada del front: intenta generar con IA y, si no lo logra, recurre al banco.
 export async function POST(request) {
   const entrada = await request.json().catch(() => null);
   if (!entrada) {
@@ -20,13 +20,47 @@ export async function POST(request) {
     );
   }
 
-  const resultado = await obtenerActividad(validacion.config, {
-    proveedor: entrada.proveedor,
-  });
+  const inicioMs = Date.now();
+  const opciones = { proveedor: entrada.proveedor, inicioMs };
 
+  // Con stream el cliente recibe cada paso en tiempo real (NDJSON).
+  if (request.nextUrl.searchParams.get("stream") === "1") {
+    const codificador = new TextEncoder();
+    const flujo = new ReadableStream({
+      async start(controlador) {
+        const enviar = (evento) =>
+          controlador.enqueue(codificador.encode(`${JSON.stringify(evento)}\n`));
+
+        try {
+          const resultado = await obtenerActividad(validacion.config, {
+            ...opciones,
+            onProgreso: enviar,
+          });
+          enviar(
+            resultado.origen
+              ? { tipo: "resultado", ...resultado }
+              : { tipo: "error", ...resultado.error }
+          );
+        } catch (error) {
+          enviar({ tipo: "error", codigo: "inesperado", mensaje: error.message });
+        } finally {
+          controlador.close();
+        }
+      },
+    });
+
+    return new Response(flujo, {
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-store, no-transform",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+
+  const resultado = await obtenerActividad(validacion.config, opciones);
   if (!resultado.origen) {
     return NextResponse.json(resultado.error, { status: 503 });
   }
-
   return NextResponse.json(resultado);
 }

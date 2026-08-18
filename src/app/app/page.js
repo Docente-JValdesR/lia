@@ -4,12 +4,14 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AvisoIA from "@/components/AvisoIA";
 import ChatLIA from "@/components/chat/ChatLIA";
+import ProgresoGeneracion from "@/components/chat/ProgresoGeneracion";
 import ConfigPanel from "@/components/ConfigPanel";
 import LecturaView from "@/components/LecturaView";
 import Quiz from "@/components/Quiz";
 import Resultados from "@/components/Resultados";
 import { useVoz } from "@/components/voz/VozProvider";
-import { CONFIG_DEFAULT } from "@/data/curriculum";
+import { CONFIG_DEFAULT, getExtension } from "@/data/curriculum";
+import { generarConProgreso } from "@/lib/generarConProgreso";
 
 const PASOS = [
   { id: "config", label: "Configurar" },
@@ -37,6 +39,7 @@ function AplicacionLectura() {
   const [respuestas, setRespuestas] = useState({});
   const [metricas, setMetricas] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [pasosGeneracion, setPasosGeneracion] = useState([]);
   const [error, setError] = useState(null);
 
   // Abre directamente un texto de la biblioteca, sin pasar por la configuración.
@@ -60,27 +63,35 @@ function AplicacionLectura() {
   const generar = async () => {
     setCargando(true);
     setError(null);
-    try {
-      const res = await fetch("/api/actividad", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+    setPasosGeneracion([{ tipo: "preparando", estado: "activo" }]);
+
+    const anotar = (evento) =>
+      setPasosGeneracion((previos) => {
+        const cerrados = previos.map((p) =>
+          p.estado === "activo"
+            ? { ...p, estado: evento.tipo === "rechazado" ? "fallido" : "hecho" }
+            : p
+        );
+        if (["listo", "sin_disponibilidad"].includes(evento.tipo)) return cerrados;
+        return [...cerrados, { ...evento, estado: "activo" }];
       });
-      const cuerpo = await res.json();
-      if (!res.ok) {
-        setError(`${cuerpo.titulo ?? "No disponible"}: ${cuerpo.mensaje ?? "Intenta nuevamente."}`);
-        return;
-      }
-      if (cuerpo.aviso) setError(cuerpo.aviso);
-      setLectura(cuerpo.texto);
-      setRespuestas({});
-      setMetricas(null);
-      setPaso("lectura");
-    } catch {
-      setError("No se pudo conectar con el servicio de generación.");
-    } finally {
-      setCargando(false);
+
+    const final = await generarConProgreso(config, { onPaso: anotar });
+    setPasosGeneracion([]);
+    setCargando(false);
+
+    if (final.tipo === "error") {
+      setError(
+        `${final.titulo ?? "No disponible"}: ${final.mensaje ?? "Inténtalo nuevamente."}`
+      );
+      return;
     }
+
+    if (final.aviso) setError(final.aviso);
+    setLectura(final.texto);
+    setRespuestas({});
+    setMetricas(null);
+    setPaso("lectura");
   };
 
   const pasoActual = PASOS.findIndex((p) => p.id === paso);
@@ -169,12 +180,22 @@ function AplicacionLectura() {
           )}
 
           {paso === "config" && (
-            <ConfigPanel
-              config={config}
-              onChange={setConfig}
-              onGenerar={generar}
-              cargando={cargando}
-            />
+            <>
+              {cargando && (
+                <div className="mb-5">
+                  <ProgresoGeneracion
+                    pasos={pasosGeneracion}
+                    extension={getExtension(config.nivel, config.dificultad)}
+                  />
+                </div>
+              )}
+              <ConfigPanel
+                config={config}
+                onChange={setConfig}
+                onGenerar={generar}
+                cargando={cargando}
+              />
+            </>
           )}
 
           {paso === "lectura" && lectura && (

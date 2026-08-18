@@ -59,11 +59,6 @@ export function resumenConfiguracion({ nivel, unidad, tipoTexto, extension, cant
   return `Resumen: ${nivel}, unidad "${unidad}", texto ${tipoTexto.toLowerCase()} de ${extension.min} a ${extension.max} palabras y ${cantidad} preguntas.`;
 }
 
-export const PREPARANDO = [
-  "Estoy preparando tu texto, dame unos segundos...",
-  "Ya casi: estoy escribiendo las preguntas.",
-];
-
 export const AVISO_IA =
   "Un dato importante: yo escribo estos textos con inteligencia artificial, así que la información podría tener errores. Si algo te llama la atención, comentálo con tu profesor o profesora.";
 

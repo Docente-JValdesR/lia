@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BurbujaLIA, BurbujaUsuario } from "@/components/chat/Burbuja";
 import CierreActividad from "@/components/chat/CierreActividad";
+import ProgresoGeneracion from "@/components/chat/ProgresoGeneracion";
 import LecturaView from "@/components/LecturaView";
 import Resultados from "@/components/Resultados";
 import BotonEscuchar from "@/components/voz/BotonEscuchar";
@@ -20,6 +21,7 @@ import {
   TIPOS_TEXTO,
 } from "@/data/curriculum";
 import { calcularDesempeno } from "@/lib/desempeno";
+import { generarConProgreso } from "@/lib/generarConProgreso";
 import {
   anuncioLectura,
   AVISO_IA,
@@ -27,7 +29,6 @@ import {
   comentarioFluidez,
   confirmacionNivel,
   DESPEDIDA,
-  PREPARANDO,
   PREGUNTA_HABILIDADES_MANUAL,
   PREGUNTA_NIVEL,
   PREGUNTA_VOZ,
@@ -64,6 +65,7 @@ export default function ChatLIA() {
   const [metricas, setMetricas] = useState(null);
   const [indice, setIndice] = useState(0);
   const [resultado, setResultado] = useState(null);
+  const [pasosGeneracion, setPasosGeneracion] = useState([]);
   const [verInforme, setVerInforme] = useState(false);
 
   const finRef = useRef(null);
@@ -204,32 +206,34 @@ export default function ChatLIA() {
   const comenzar = async () => {
     responder("¡Comencemos!");
     setPaso("generando");
-    decir(PREPARANDO[0]);
+    setPasosGeneracion([{ tipo: "preparando", estado: "activo" }]);
 
-    try {
-      const res = await fetch("/api/actividad", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+    const anotar = (evento) =>
+      setPasosGeneracion((previos) => {
+        const cerrados = previos.map((p) =>
+          p.estado === "activo"
+            ? { ...p, estado: evento.tipo === "rechazado" ? "fallido" : "hecho" }
+            : p
+        );
+        if (["listo", "sin_disponibilidad"].includes(evento.tipo)) return cerrados;
+        return [...cerrados, { ...evento, estado: "activo" }];
       });
-      const cuerpo = await res.json();
 
-      if (!res.ok) {
-        decir(cuerpo.mensaje ?? "No pude preparar tu actividad ahora.", cuerpo.sugerencia);
-        setPaso("confirmar");
-        return;
-      }
+    const final = await generarConProgreso(config, { onPaso: anotar });
+    setPasosGeneracion([]);
 
-      setLectura(cuerpo.texto);
-      decir(cuerpo.aviso, AVISO_IA, anuncioLectura(cuerpo.texto.nivel));
-      setPaso("lectura");
-    } catch {
+    if (final.tipo === "error") {
       decir(
-        "Tuve un problema de conexión y no pude preparar tu actividad.",
-        "Revisa tu conexión e inténtalo otra vez en unos minutos."
+        final.mensaje ?? "No pude preparar tu actividad ahora.",
+        final.sugerencia ?? "Puedes intentarlo otra vez o elegir un texto más corto."
       );
       setPaso("confirmar");
+      return;
     }
+
+    setLectura(final.texto);
+    decir(final.aviso, AVISO_IA, anuncioLectura(final.texto.nivel));
+    setPaso("lectura");
   };
 
   const terminarLectura = (m) => {
@@ -527,9 +531,12 @@ export default function ChatLIA() {
         )}
 
         {paso === "generando" && (
-          <p className="pl-12 text-xs text-ink-soft">
-            Preparando tu actividad... esto puede tardar unos segundos.
-          </p>
+          <div className="pl-12">
+            <ProgresoGeneracion
+              pasos={pasosGeneracion}
+              extension={config.nivel ? getExtension(config.nivel, config.dificultad) : null}
+            />
+          </div>
         )}
 
         <div ref={finRef} />

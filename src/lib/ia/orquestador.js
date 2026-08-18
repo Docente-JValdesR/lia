@@ -25,10 +25,12 @@ const RELAJACIONES = [
 ];
 
 export async function obtenerActividad(config, opciones = {}) {
+  const { onProgreso = () => {} } = opciones;
   const problemas = [];
 
   try {
-    const resultado = await generarActividad(config, opciones);
+    const resultado = await generarActividad(config, { ...opciones, onProgreso });
+    onProgreso({ tipo: "listo", origen: "ia", proveedor: resultado.proveedor });
     return {
       origen: "ia",
       texto: serializarTexto(resultado.texto),
@@ -40,8 +42,10 @@ export async function obtenerActividad(config, opciones = {}) {
     problemas.push(error.message);
   }
 
+  onProgreso({ tipo: "buscando_banco" });
   const delBanco = await buscarEnBanco(config);
   if (delBanco) {
+    onProgreso({ tipo: "listo", origen: "banco" });
     return {
       origen: "banco",
       texto: serializarTexto(delBanco.texto),
@@ -50,6 +54,7 @@ export async function obtenerActividad(config, opciones = {}) {
     };
   }
 
+  onProgreso({ tipo: "sin_disponibilidad" });
   return {
     origen: null,
     error: {

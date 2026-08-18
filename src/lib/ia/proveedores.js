@@ -2,6 +2,7 @@ import "server-only";
 import { ENV } from "@/lib/env";
 
 // Los cuatro proveedores exponen una API compatible con OpenAI, así que comparten adaptador.
+// tokensPorSegundo proviene de la medición real registrada en la tabla `generaciones`.
 export const MODELOS = [
   {
     id: "groq",
@@ -10,17 +11,10 @@ export const MODELOS = [
     modelo: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
     // gpt-oss es un modelo de razonamiento: sin acotarlo devuelve el JSON vacío.
     extras: { reasoning_effort: "low" },
+    maxSalida: 65536,
+    tokensPorSegundo: 400,
     get clave() {
       return ENV.ia.groq;
-    },
-  },
-  {
-    id: "gemini",
-    proveedor: "gemini",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    modelo: process.env.GEMINI_MODEL || "gemini-3.6-flash",
-    get clave() {
-      return ENV.ia.gemini;
     },
   },
   {
@@ -28,6 +22,8 @@ export const MODELOS = [
     proveedor: "mistral",
     baseUrl: "https://api.mistral.ai/v1/chat/completions",
     modelo: process.env.MISTRAL_MODEL || "mistral-small-latest",
+    maxSalida: 32768,
+    tokensPorSegundo: 130,
     get clave() {
       return ENV.ia.mistral;
     },
@@ -36,9 +32,22 @@ export const MODELOS = [
     id: "openrouter",
     proveedor: "openrouter",
     baseUrl: "https://openrouter.ai/api/v1/chat/completions",
-    modelo: process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free",
+    modelo: process.env.OPENROUTER_MODEL || "nvidia/nemotron-3.5-lightning:free",
+    maxSalida: 65536,
+    tokensPorSegundo: 90,
     get clave() {
       return ENV.ia.openrouter;
+    },
+  },
+  {
+    id: "gemini",
+    proveedor: "gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    modelo: process.env.GEMINI_MODEL || "gemini-3.6-flash",
+    maxSalida: 65536,
+    tokensPorSegundo: 50,
+    get clave() {
+      return ENV.ia.gemini;
     },
   },
 ];
@@ -47,13 +56,29 @@ export function modelosDisponibles() {
   return MODELOS.filter((m) => Boolean(m.clave));
 }
 
-export function resolverRonda(soloProveedor) {
+export function resolverRonda(soloProveedor, { maxTokens = 0, presupuestoMs = 0 } = {}) {
   const disponibles = modelosDisponibles();
-  if (!soloProveedor) return disponibles;
-  return disponibles.filter((m) => m.id === soloProveedor);
+  if (soloProveedor) return disponibles.filter((m) => m.id === soloProveedor);
+  if (!maxTokens) return disponibles;
+
+  const alcanzan = disponibles.filter((m) => {
+    if (m.maxSalida && maxTokens > m.maxSalida) return false;
+    if (!presupuestoMs) return true;
+    // Se descarta el modelo que no alcanzaría a terminar dentro del tiempo disponible.
+    return (maxTokens / m.tokensPorSegundo) * 1000 <= presupuestoMs;
+  });
+
+  const ronda = alcanzan.length ? alcanzan : disponibles;
+  return [...ronda].sort((a, b) => b.tokensPorSegundo - a.tokensPorSegundo);
 }
 
-export async function pedirGeneracion(modelo, prompt, { timeoutMs = 90000 } = {}) {
+// El español consume ~1.6 tokens por palabra; cada pregunta suma enunciado, alternativas y explicación.
+export function calcularMaxTokens({ palabras, preguntas }) {
+  const estimado = Math.ceil(palabras * 1.6 + preguntas * 170 + 600);
+  return Math.min(Math.max(estimado, 1500), 16000);
+}
+
+export async function pedirGeneracion(modelo, prompt, { timeoutMs = 60000, maxTokens } = {}) {
   const control = new AbortController();
   const temporizador = setTimeout(() => control.abort(), timeoutMs);
   const inicio = Date.now();
@@ -69,6 +94,7 @@ export async function pedirGeneracion(modelo, prompt, { timeoutMs = 90000 } = {}
       body: JSON.stringify({
         model: modelo.modelo,
         temperature: 0.8,
+        max_tokens: maxTokens,
         response_format: { type: "json_object" },
         ...(modelo.extras ?? {}),
         messages: [
