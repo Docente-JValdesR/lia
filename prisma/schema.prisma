@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// Texto de lectura generado por IA y curado antes de llegar al aula.
+model Texto {
+  id            String   @id @default(uuid())
+  titulo        String
+  parrafos      String // JSON: array de párrafos
+  nivel         String
+  unidad        String
+  tipoTexto     String   @map("tipo_texto")
+  dificultad    String
+  nPalabras     Int      @map("n_palabras")
+  estado        String   @default("borrador") // borrador | aprobado | retirado
+  proveedor     String?
+  modelo        String?
+  promptVersion String?  @map("prompt_version")
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  preguntas    Pregunta[]
+  generaciones Generacion[]
+  valoraciones ValoracionTexto[]
+
+  @@index([nivel, unidad, dificultad, estado])
+  @@index([estado])
+  @@map("textos")
+}
+
+model Pregunta {
+  id          String @id @default(uuid())
+  textoId     String @map("texto_id")
+  orden       Int
+  enunciado   String
+  alternativas String // JSON: array de strings
+  correcta    Int
+  explicacion String
+  habilidadId String @map("habilidad_id")
+  eje         String
+  oaCodigo    String @map("oa_codigo")
+
+  texto        Texto                @relation(fields: [textoId], references: [id], onDelete: Cascade)
+  valoraciones ValoracionPregunta[]
+
+  @@index([textoId])
+  @@map("preguntas")
+}
+
+/// Trazabilidad de cada llamada a un modelo, para comparar proveedores.
+model Generacion {
+  id            String   @id @default(uuid())
+  textoId       String?  @map("texto_id")
+  proveedor     String
+  modelo        String
+  promptVersion String   @map("prompt_version")
+  prompt        String
+  respuestaCruda String? @map("respuesta_cruda")
+  tokensIn      Int?     @map("tokens_in")
+  tokensOut     Int?     @map("tokens_out")
+  latenciaMs    Int?     @map("latencia_ms")
+  ok            Boolean  @default(false)
+  error         String?
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  texto Texto? @relation(fields: [textoId], references: [id], onDelete: SetNull)
+
+  @@index([proveedor, modelo])
+  @@index([ok])
+  @@map("generaciones")
+}
+
+model ValoracionTexto {
+  id         String   @id @default(uuid())
+  textoId    String   @map("texto_id")
+  estrellas  Int
+  comentario String?
+  origen     String   @default("estudiante") // estudiante | docente
+  creadoEn   DateTime @default(now()) @map("creado_en")
+
+  texto Texto @relation(fields: [textoId], references: [id], onDelete: Cascade)
+
+  @@index([textoId])
+  @@map("valoraciones_texto")
+}
+
+model ValoracionPregunta {
+  id         String   @id @default(uuid())
+  preguntaId String   @map("pregunta_id")
+  estrellas  Int
+  comentario String?
+  origen     String   @default("estudiante")
+  creadoEn   DateTime @default(now()) @map("creado_en")
+
+  pregunta Pregunta @relation(fields: [preguntaId], references: [id], onDelete: Cascade)
+
+  @@index([preguntaId])
+  @@map("valoraciones_pregunta")
+}

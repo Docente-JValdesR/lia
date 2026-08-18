@@ -1,26 +1,103 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Los tokens apuntan a variables que cambian con el tema activo. */
+@theme {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+
+  --font-sans: var(--font-nunito), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --brand: #6965db;
+  --brand-hover: #4f4bc0;
+  --brand-soft: #e8e7ff;
+  --teal: #3fa9aa;
+  --teal-soft: #e2f5f5;
+  --accent: #d9932c;
+  --accent-soft: #fdf1de;
+  --danger: #d9534f;
+  --danger-soft: #fdeaea;
+  --canvas: #f8f9fc;
+  --surface: #ffffff;
+  --surface-2: #f2f4fa;
+  --ink: #292b38;
+  --ink-soft: #6b6f80;
+  --line: #e6e8f0;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --brand: #8a86ee;
+  --brand-hover: #a29ef5;
+  --brand-soft: #2c2b4d;
+  --teal: #63cdce;
+  --teal-soft: #1d3a3b;
+  --accent: #f0b463;
+  --accent-soft: #3a2e1c;
+  --danger: #f08a86;
+  --danger-soft: #3b2222;
+  --canvas: #12131a;
+  --surface: #1b1d28;
+  --surface-2: #232633;
+  --ink: #f2f3f8;
+  --ink-soft: #a2a7ba;
+  --line: #2e3142;
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--canvas);
+  color: var(--ink);
+}
+
+/* Gradiente reservado para elementos de IA, progreso y generación. */
+.lia-gradient {
+  background-image: linear-gradient(90deg, var(--brand), var(--teal));
+}
+
+.lia-text-gradient {
+  background-image: linear-gradient(90deg, var(--brand), var(--teal));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes lia-caida {
+  0% {
+    transform: translate3d(0, -12vh, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--desvio, 0), 108vh, 0) rotate(var(--giro, 540deg));
+    opacity: 0.85;
+  }
+}
+
+.lia-serpentina {
+  position: absolute;
+  top: 0;
+  animation: lia-caida var(--duracion, 3.4s) linear var(--retraso, 0s) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lia-serpentina {
+    display: none;
+  }
 }

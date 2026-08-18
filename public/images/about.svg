@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 380" fill="none">
+  <defs>
+    <linearGradient id="ag" x1="110" y1="70" x2="420" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6965DB" />
+      <stop offset="1" stop-color="#55BFC0" />
+    </linearGradient>
+  </defs>
+  <circle cx="260" cy="190" r="150" fill="#E8E7FF" />
+  <path d="M260 120c-32-24-72-32-116-26v166c44-6 84 2 116 26V120Z" fill="url(#ag)" />
+  <path d="M260 120c32-24 72-32 116-26v166c-44-6-84 2-116 26V120Z" fill="url(#ag)" opacity="0.55" />
+  <path d="M260 120v166" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" />
+  <rect x="172" y="152" width="60" height="8" rx="4" fill="#FFFFFF" fill-opacity="0.75" />
+  <rect x="172" y="176" width="72" height="8" rx="4" fill="#FFFFFF" fill-opacity="0.75" />
+  <rect x="172" y="200" width="52" height="8" rx="4" fill="#FFFFFF" fill-opacity="0.75" />
+  <rect x="292" y="152" width="60" height="8" rx="4" fill="#FFFFFF" fill-opacity="0.85" />
+  <rect x="292" y="176" width="72" height="8" rx="4" fill="#FFFFFF" fill-opacity="0.85" />
+  <rect x="292" y="200" width="52" height="8" rx="4" fill="#FFFFFF" fill-opacity="0.85" />
+  <circle cx="260" cy="318" r="15" fill="#F4B860" />
+</svg>

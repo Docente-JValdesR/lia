@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="liaIcon" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6965DB" />
+      <stop offset="1" stop-color="#55BFC0" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#liaIcon)" />
+  <path d="M20 17v24h13" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M43 25v13M36.5 31.5h13" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" />
+</svg>
